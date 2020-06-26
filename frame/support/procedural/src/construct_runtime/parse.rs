@@ -41,8 +41,8 @@ mod keyword {
 
 #[derive(Debug)]
 pub struct RuntimeDefinition {
-	// Specified through inner attribute: `#[local_macro(my_pallet)]`
-	pub local_macro: Ident,
+	// Specified through optional inner attribute: `#[local_macro(my_pallet)]`
+	pub local_macro: Option<Ident>,
 	pub visibility_token: Token![pub],
 	pub enum_token: Token![enum],
 	pub name: Ident,
@@ -66,12 +66,11 @@ impl Parse for LocalMacroDef {
 
 impl Parse for RuntimeDefinition {
 	fn parse(input: ParseStream) -> Result<Self> {
-		let outer_attrs = syn::Attribute::parse_inner(input)?;
-		if outer_attrs.len() > 1 {
-			let msg = "Only one optional outer attribute is accepted, found multiple ones";
-			return Err(Error::new(outer_attrs[2].span(), msg));
-		}
-		let local_macro = input.parse::<LocalMacroDef>()?.0;
+		let local_macro = if input.peek(Token![#]) {
+			Some(input.parse::<LocalMacroDef>()?.0)
+		} else {
+			None
+		};
 
 		Ok(Self {
 			local_macro,

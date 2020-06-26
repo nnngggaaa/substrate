@@ -17,7 +17,7 @@
 
 #![recursion_limit="128"]
 
-use sp_runtime::{generic, BuildStorage, traits::{BlakeTwo256, Block as _, Verify}};
+use sp_runtime::{generic, BuildStorage, traits::{BlakeTwo256, Verify}};
 use frame_support::{
 	Parameter, traits::Get, parameter_types,
 	metadata::{
@@ -269,8 +269,6 @@ frame_support::construct_runtime!(
 		Module3: module3::{Module, Call},
 	}
 );
-
-type TestHeaderFor<T> = generic::Header<<T as system::Trait>::BlockNumber, BlakeTwo256>;
 
 pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
 pub type Block = generic::Block<Header, UncheckedExtrinsic>;

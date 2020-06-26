@@ -44,11 +44,11 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 }
 
 fn construct_runtime_preprocess(
-	definition: &RuntimeDefinition,
+	def: &RuntimeDefinition,
 	input_clone: TokenStream2,
 ) -> Result<Option<TokenStream2>> {
 	let mut auto_modules = vec![];
-	for module in definition.modules.content.inner.iter() {
+	for module in def.modules.content.inner.iter() {
 		if module.module_parts.is_none() {
 			auto_modules.push(module.clone())
 		}
@@ -64,7 +64,7 @@ fn construct_runtime_preprocess(
 		let mut expand = quote!( #scrate::construct_runtime! { #input_clone } );
 
 		while let Some(module) = auto_modules.pop()  {
-			let macro_call = if definition.local_macro == module.module {
+			let macro_call = if def.local_macro.as_ref().map_or(false, |m| *m == module.module) {
 				quote!( construct_runtime_args! )
 			} else {
 				let module = &module.module;
@@ -224,6 +224,12 @@ fn decl_outer_inherent<'a>(
 		})
 	});
 	quote!(
+		// Prevent UncheckedExtrinsic to print unused warning.
+		const _: () = {
+			#[allow(unused)]
+			type __hidden_use_unchecked_extrinsic = #unchecked_extrinsic;
+		};
+
 		#scrate::impl_outer_inherent!(
 			impl Inherents where Block = #block, UncheckedExtrinsic = #unchecked_extrinsic {
 				#(#modules_tokens)*

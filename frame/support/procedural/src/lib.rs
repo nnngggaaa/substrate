@@ -362,6 +362,14 @@ pub fn expand_after(input: TokenStream) -> TokenStream {
 /// ```nocompile
 /// decl_construct_runtime_args!(Module, Call, Event<T>)
 /// ```
+///
+/// # Limitation:
+///
+/// * `Inherent(another_pallet)` is not supported because there is no way to know the other pallet
+///   name in advance, though `Inherent` is supported.
+///
+/// * Only one declararion is allowed per crate, if a crate define multiples pallet, make sure
+///   `decl_construct_runtime_args` is declare in the namespace of the wanted pallet.
 #[proc_macro]
 pub fn decl_construct_runtime_args(input: TokenStream) -> TokenStream {
 	use frame_support_procedural_tools::generate_crate_access;

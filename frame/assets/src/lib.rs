@@ -285,7 +285,7 @@ impl<T: Trait> Module<T> {
 
 #[cfg(test)]
 mod tests {
-	use crate as frame_assets;
+	use crate as pallet_assets;
 	use super::*;
 
 	use frame_support::{construct_runtime, assert_ok, assert_noop, parameter_types, weights::Weight};
@@ -294,18 +294,17 @@ mod tests {
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
 	use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 
-	#[allow(unused)]
 	type UncheckedExtrinsic = frame_system::MockUncheckedExtrinsic<Test>;
 	type Block = frame_system::MockBlock<Test>;
 
-	construct_runtime!(#[local_macro(frame_assets)]
+	construct_runtime!(#[local_macro(pallet_assets)]
 		pub enum Test where
 			Block = Block,
 			NodeBlock = Block,
 			UncheckedExtrinsic = UncheckedExtrinsic,
 		{
 			System: frame_system,
-			Asset: frame_assets,
+			Asset: pallet_assets,
 		}
 	);
 

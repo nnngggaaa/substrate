@@ -13,7 +13,6 @@ use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
 };
 
-#[allow(unused)]
 type UncheckedExtrinsic = frame_system::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::MockBlock<Test>;
 

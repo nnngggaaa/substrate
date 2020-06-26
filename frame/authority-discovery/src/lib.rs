@@ -106,7 +106,6 @@ mod tests {
 	};
 	use frame_support::{construct_runtime, parameter_types, weights::Weight};
 
-	#[allow(unused)]
 	type UncheckedExtrinsic = frame_system::MockUncheckedExtrinsic<Test>;
 	type Block = frame_system::MockBlock<Test>;
 

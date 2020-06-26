@@ -30,18 +30,17 @@ use frame_support::{construct_runtime, parameter_types, weights::Weight};
 use sp_io;
 use sp_core::H256;
 
-#[allow(unused)]
 type UncheckedExtrinsic = frame_system::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::MockBlock<Test>;
 
-construct_runtime!(#[local_macro(pallet_aura)]
+construct_runtime!(
 	pub enum Test where
 		Block = Block,
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system,
-		Aura: pallet_aura,
+		Aura: pallet_aura::{Module, Storage, Config<T>, Inherent(Timestamp)},
 		Timestamp: pallet_timestamp,
 	}
 );

@@ -36,7 +36,7 @@ use sp_authorship::{INHERENT_IDENTIFIER, UnclesInherentData, InherentError};
 
 const MAX_UNCLES: usize = 10;
 
-decl_construct_runtime_args!(Module, Call, Storage);
+decl_construct_runtime_args!(Module, Call, Storage, Inherent);
 
 pub trait Trait: frame_system::Trait {
 	/// Find the author of a block.
@@ -408,7 +408,6 @@ mod tests {
 	};
 	use frame_support::{parameter_types, construct_runtime, ConsensusEngineId, weights::Weight};
 
-	#[allow(unused)]
 	type UncheckedExtrinsic = frame_system::MockUncheckedExtrinsic<Test>;
 	type Block = frame_system::MockBlock<Test>;
 
