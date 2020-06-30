@@ -97,8 +97,10 @@ pub fn run() -> Result<()> {
 		}
 		Some(Subcommand::Base(subcommand)) => {
 			let runner = cli.create_runner(subcommand)?;
-
-			runner.run_subcommand(subcommand, |config| Ok(new_full_start!(config).0))
+			runner.run_subcommand(subcommand, |config| {
+				let (client, backend, .., import_queue) = new_full_up_to_import_queue!(&config);
+				Ok((client, backend, import_queue))
+			})
 		}
 	}
 }

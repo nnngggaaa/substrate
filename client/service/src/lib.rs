@@ -23,7 +23,6 @@
 #![recursion_limit="128"]
 
 pub mod config;
-#[macro_use]
 pub mod chain_ops;
 pub mod error;
 
@@ -35,6 +34,8 @@ pub mod client;
 mod client;
 mod task_manager;
 
+pub use sp_consensus::import_queue::ImportQueue;
+pub use builder::*;
 use std::{io, pin::Pin};
 use std::net::SocketAddr;
 use std::collections::HashMap;
@@ -54,9 +55,10 @@ use sp_utils::{status_sinks, mpsc::{tracing_unbounded, TracingUnboundedReceiver,
 
 pub use self::error::Error;
 pub use self::builder::{
-	new_full_client, new_client,
-	ServiceBuilder, ServiceBuilderCommand, TFullClient, TLightClient, TFullBackend, TLightBackend,
-	TFullCallExecutor, TLightCallExecutor, RpcExtensionBuilder,
+	new_full_client, new_client, new_full_parts,
+	ServiceBuilderCommand, TFullClient, TLightClient, TFullBackend, TLightBackend,
+	TFullCallExecutor, TLightCallExecutor, RpcExtensionBuilder, build_common, ServiceParams,
+	NoopRpcExtensionBuilder,
 };
 pub use config::{
 	BasePath, Configuration, DatabaseConfig, PruningMode, Role, RpcMethods, TaskExecutor, TaskType,
@@ -151,30 +153,20 @@ impl TelemetryOnConnectSinks {
 
 /// The individual components of the chain, built by the service builder. You are encouraged to
 /// deconstruct this into its fields.
-pub struct ServiceComponents<TBl: BlockT, TBackend: Backend<TBl>, TSc, TExPool, TCl> {
-	/// A blockchain client.
-	pub client: Arc<TCl>,
-	/// A shared transaction pool instance.
-	pub transaction_pool: Arc<TExPool>,
-	/// The chain task manager. 
-	pub task_manager: TaskManager,
-	/// A keystore that stores keys.
-	pub keystore: sc_keystore::KeyStorePtr,
+pub struct ServiceComponents<TBl: BlockT, TBackend: Backend<TBl>, TCl> {
 	/// A shared network instance.
 	pub network: Arc<sc_network::NetworkService<TBl, <TBl as BlockT>::Hash>>,
 	/// RPC handlers that can perform RPC queries.
 	pub rpc_handlers: Arc<RpcHandlers>,
-	/// A shared instance of the chain selection algorithm.
-	pub select_chain: Option<TSc>,
 	/// Sinks to propagate network status updates.
 	pub network_status_sinks: NetworkStatusSinks<TBl>,
-	/// A prometheus metrics registry, (if enabled).
-	pub prometheus_registry: Option<prometheus_endpoint::Registry>,
 	/// Shared Telemetry connection sinks,
 	pub telemetry_on_connect_sinks: TelemetryOnConnectSinks,
 	/// A shared offchain workers instance.
 	pub offchain_workers: Option<Arc<sc_offchain::OffchainWorkers<
-		TCl, TBackend::OffchainStorage, TBl
+		TCl,
+		TBackend::OffchainStorage,
+		TBl
 	>>>,
 }
 
