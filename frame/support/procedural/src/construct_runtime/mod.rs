@@ -53,7 +53,7 @@ fn construct_runtime_preprocess(
 			auto_modules.push(module.clone())
 		}
 	}
-	
+
 	if !auto_modules.is_empty() {
 
 		// Make frame-support available to construct_runtime_args

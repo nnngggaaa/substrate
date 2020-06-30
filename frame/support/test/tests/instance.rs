@@ -19,7 +19,7 @@
 
 use sp_runtime::{generic, BuildStorage, traits::{BlakeTwo256, Verify}};
 use frame_support::{
-	Parameter, traits::Get, parameter_types,
+	Parameter, traits::Get, parameter_types, decl_construct_runtime_args,
 	metadata::{
 		DecodeDifferent, StorageMetadata, StorageEntryModifier, StorageEntryType, DefaultByteGetter,
 		StorageEntryMetadata, StorageHasher,
@@ -117,6 +117,8 @@ mod module1 {
 // * use of no_genesis_config_phantom_data
 mod module2 {
 	use super::*;
+
+	decl_construct_runtime_args!(Module, Call, Storage, Config<T>, Event<T>, Origin<T>, Inherent);
 
 	pub trait Trait<I=DefaultInstance>: system::Trait {
 		type Amount: Parameter + Default;
@@ -243,7 +245,7 @@ impl system::Trait for Runtime {
 	type Call = Call;
 }
 
-frame_support::construct_runtime!(
+frame_support::construct_runtime!(#[local_macro(module2)]
 	pub enum Runtime where
 		Block = Block,
 		NodeBlock = Block,
@@ -256,16 +258,10 @@ frame_support::construct_runtime!(
 		Module1_2: module1::<Instance2>::{
 			Module, Call, Storage, Event<T>, Config<T>, Origin<T>, Inherent
 		},
-		Module2: module2::{Module, Call, Storage, Event<T>, Config<T>, Origin<T>, Inherent},
-		Module2_1: module2::<Instance1>::{
-			Module, Call, Storage, Event<T>, Config<T>, Origin<T>, Inherent
-		},
-		Module2_2: module2::<Instance2>::{
-			Module, Call, Storage, Event<T>, Config<T>, Origin<T>, Inherent
-		},
-		Module2_3: module2::<Instance3>::{
-			Module, Call, Storage, Event<T>, Config<T>, Origin<T>, Inherent
-		},
+		Module2: module2,
+		Module2_1: module2::<Instance1>,
+		Module2_2: module2::<Instance2>,
+		Module2_3: module2::<Instance3>,
 		Module3: module3::{Module, Call},
 	}
 );
