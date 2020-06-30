@@ -411,7 +411,9 @@ impl BenchDb {
 		);
 
 		BenchContext {
-			client, backend, db_guard: directory_guard,
+			client: Arc::new(client),
+			db_guard: directory_guard,
+			backend,
 		}
 	}
 }
@@ -543,7 +545,7 @@ impl Guard {
 /// Benchmarking/test context holding instantiated client and backend references.
 pub struct BenchContext {
 	/// Node client.
-	pub client: Client,
+	pub client: Arc<Client>,
 	/// Node backend.
 	pub backend: Arc<Backend>,
 

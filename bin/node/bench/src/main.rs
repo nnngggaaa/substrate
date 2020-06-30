@@ -23,6 +23,7 @@ mod simple_trie;
 mod generator;
 mod tempdb;
 mod state_sizes;
+mod txpool;
 
 use crate::core::{run_benchmark, Mode as BenchmarkMode};
 use crate::tempdb::DatabaseType;

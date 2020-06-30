@@ -3290,6 +3290,7 @@ version = "0.8.0-rc3"
 dependencies = [
  "derive_more",
  "fs_extra",
+ "futures 0.3.4",
  "hash-db",
  "hex",
  "kvdb",
@@ -3304,6 +3305,7 @@ dependencies = [
  "rand 0.7.3",
  "sc-cli",
  "sc-client-api",
+ "sc-transaction-pool",
  "serde",
  "serde_json",
  "sp-core",
