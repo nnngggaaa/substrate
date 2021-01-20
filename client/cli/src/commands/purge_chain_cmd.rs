@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -19,7 +19,7 @@
 use crate::error;
 use crate::params::{DatabaseParams, SharedParams};
 use crate::CliConfiguration;
-use sc_service::Configuration;
+use sc_service::DatabaseConfig;
 use std::fmt::Debug;
 use std::fs;
 use std::io::{self, Write};
@@ -43,8 +43,8 @@ pub struct PurgeChainCmd {
 
 impl PurgeChainCmd {
 	/// Run the purge command
-	pub fn run(&self, config: Configuration) -> error::Result<()> {
-		let db_path = config.database.path()
+	pub fn run(&self, database_config: DatabaseConfig) -> error::Result<()> {
+		let db_path = database_config.path()
 			.ok_or_else(||
 				error::Error::Input("Cannot purge custom database implementation".into())
 		)?;

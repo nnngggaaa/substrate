@@ -18,14 +18,14 @@ tests:
               pod="polkadot-abcdef01234-abcdef",
               instance="polkadot-abcdef01234-abcdef",
             }'
-            values: '10+1x30' # 10 11 12 13 .. 40
+            values: '11+1x10 22+2x30 10043x5'
 
           - series: 'polkadot_sub_txpool_validations_finished{
               job="polkadot",
               pod="polkadot-abcdef01234-abcdef",
               instance="polkadot-abcdef01234-abcdef",
             }'
-            values: '0x30' # 0 0 0 0 .. 0
+            values: '0+1x42 42x5'
 
           - series: 'polkadot_block_height{
               status="best", job="polkadot",
@@ -42,43 +42,17 @@ tests:
             }'
             values: '1+1x3 4+0x13' # 1 2 3 4 4 4 4 4 4 4 4 4 ...
 
-          - series: 'polkadot_cpu_usage_percentage{
-              job="polkadot",
-              pod="polkadot-abcdef01234-abcdef",
-              instance="polkadot-abcdef01234-abcdef",
-            }'
-            values: '0+20x5 100+0x5' # 0 20 40 60 80 100 100 100 100 100 100
-
       alert_rule_test:
-
-          ######################################################################
-          # Resource usage
-          ######################################################################
-
-          - eval_time: 9m
-            alertname: HighCPUUsage
-            exp_alerts:
-          - eval_time: 10m
-            alertname: HighCPUUsage
-            exp_alerts:
-                - exp_labels:
-                      severity: warning
-                      pod: polkadot-abcdef01234-abcdef
-                      instance: polkadot-abcdef01234-abcdef
-                      job: polkadot
-                  exp_annotations:
-                      message: "The node polkadot-abcdef01234-abcdef has a CPU
-                      usage higher than 100% for more than 5 minutes"
 
           ######################################################################
           # Block production
           ######################################################################
 
           - eval_time: 6m
-            alertname: LowNumberOfNewBlocks
+            alertname: BlockProductionSlow
             exp_alerts:
           - eval_time: 7m
-            alertname: LowNumberOfNewBlocks
+            alertname: BlockProductionSlow
             exp_alerts:
                 - exp_labels:
                       severity: warning
@@ -87,11 +61,12 @@ tests:
                       job: polkadot
                       status: best
                   exp_annotations:
-                      message: "Less than one new block per minute on instance
-                      polkadot-abcdef01234-abcdef."
+                      message: "Best block on instance
+                      polkadot-abcdef01234-abcdef increases by less than 1 per
+                      minute for more than 3 minutes."
 
           - eval_time: 14m
-            alertname: LowNumberOfNewBlocks
+            alertname: BlockProductionSlow
             exp_alerts:
                 - exp_labels:
                       severity: warning
@@ -100,8 +75,9 @@ tests:
                       job: polkadot
                       status: best
                   exp_annotations:
-                      message: "Less than one new block per minute on instance
-                      polkadot-abcdef01234-abcdef."
+                      message: "Best block on instance
+                      polkadot-abcdef01234-abcdef increases by less than 1 per
+                      minute for more than 3 minutes."
                 - exp_labels:
                       severity: critical
                       pod: polkadot-abcdef01234-abcdef
@@ -109,8 +85,9 @@ tests:
                       job: polkadot
                       status: best
                   exp_annotations:
-                      message: "Less than one new block per minute on instance
-                      polkadot-abcdef01234-abcdef."
+                      message: "Best block on instance
+                      polkadot-abcdef01234-abcdef increases by less than 1 per
+                      minute for more than 10 minutes."
 
           ######################################################################
           # Block finalization
@@ -131,7 +108,7 @@ tests:
                   exp_annotations:
                       message: "Finalized block on instance
                       polkadot-abcdef01234-abcdef increases by less than 1 per
-                      minute."
+                      minute for more than 3 minutes."
 
           - eval_time: 14m
             alertname: BlockFinalizationSlow
@@ -145,7 +122,7 @@ tests:
                   exp_annotations:
                       message: "Finalized block on instance
                       polkadot-abcdef01234-abcdef increases by less than 1 per
-                      minute."
+                      minute for more than 3 minutes."
                 - exp_labels:
                       severity: critical
                       pod: polkadot-abcdef01234-abcdef
@@ -155,17 +132,23 @@ tests:
                   exp_annotations:
                       message: "Finalized block on instance
                       polkadot-abcdef01234-abcdef increases by less than 1 per
-                      minute."
+                      minute for more than 10 minutes."
 
           ######################################################################
           # Transaction queue
           ######################################################################
 
-          - eval_time: 10m
-            alertname: TransactionQueueSize
-            exp_alerts:
           - eval_time: 11m
-            alertname: TransactionQueueSize
+            alertname: TransactionQueueSizeIncreasing
+            # Number of validations scheduled and finished both grow at a rate
+            # of 1 in the first 10 minutes, thereby the queue is not increasing
+            # in size, thus don't expect an alert.
+            exp_alerts:
+          - eval_time: 22m
+            alertname: TransactionQueueSizeIncreasing
+            # Number of validations scheduled is growing twice as fast as the
+            # number of validations finished after minute 10. Thus expect
+            # warning alert after 20 minutes.
             exp_alerts:
                 - exp_labels:
                       severity: warning
@@ -173,12 +156,14 @@ tests:
                       instance: polkadot-abcdef01234-abcdef
                       job: polkadot
                   exp_annotations:
-                      message: "The node polkadot-abcdef01234-abcdef has more
-                      than 10 transactions in the queue for more than 10
-                      minutes"
-
-          - eval_time: 31m
-            alertname: TransactionQueueSize
+                      message: "The transaction pool size on node
+                      polkadot-abcdef01234-abcdef has been monotonically
+                      increasing for more than 10 minutes."
+          - eval_time: 43m
+            alertname: TransactionQueueSizeIncreasing
+            # Number of validations scheduled is growing twice as fast as the
+            # number of validations finished after minute 10. Thus expect
+            # both warning and critical alert after 40 minutes.
             exp_alerts:
                 - exp_labels:
                       severity: warning
@@ -186,28 +171,43 @@ tests:
                       instance: polkadot-abcdef01234-abcdef
                       job: polkadot
                   exp_annotations:
-                      message: "The node polkadot-abcdef01234-abcdef has more
-                      than 10 transactions in the queue for more than 10
-                      minutes"
+                      message: "The transaction pool size on node
+                      polkadot-abcdef01234-abcdef has been monotonically
+                      increasing for more than 10 minutes."
                 - exp_labels:
                       severity: critical
                       pod: polkadot-abcdef01234-abcdef
                       instance: polkadot-abcdef01234-abcdef
                       job: polkadot
                   exp_annotations:
-                      message: "The node polkadot-abcdef01234-abcdef has more
-                      than 10 transactions in the queue for more than 30
-                      minutes"
+                      message: "The transaction pool size on node
+                      polkadot-abcdef01234-abcdef has been monotonically
+                      increasing for more than 30 minutes."
+          - eval_time: 49m
+            alertname: TransactionQueueSizeHigh
+            # After minute 43 the number of validations scheduled jumps up
+            # drastically while the number of validations finished stays the
+            # same. Thus expect an alert.
+            exp_alerts:
+                - exp_labels:
+                      severity: critical
+                      pod: polkadot-abcdef01234-abcdef
+                      instance: polkadot-abcdef01234-abcdef
+                      job: polkadot
+                  exp_annotations:
+                      message: "The transaction pool size on node
+                      polkadot-abcdef01234-abcdef has been above 10_000 for more
+                      than 5 minutes."
 
           ######################################################################
           # Networking
           ######################################################################
 
           - eval_time: 3m # Values: 3 2 2
-            alertname: LowNumberOfPeers
+            alertname: NumberOfPeersLow
             exp_alerts:
           - eval_time: 4m # Values: 2 2 2
-            alertname: LowNumberOfPeers
+            alertname: NumberOfPeersLow
             exp_alerts:
                 - exp_labels:
                       severity: warning
@@ -219,7 +219,7 @@ tests:
                       than 3 peers for more than 3 minutes"
 
           - eval_time: 16m # Values: 3 2 2 2 2 2 1 1 1 1 1 1 1 1 1 1 1
-            alertname: LowNumberOfPeers
+            alertname: NumberOfPeersLow
             exp_alerts:
                 - exp_labels:
                       severity: warning

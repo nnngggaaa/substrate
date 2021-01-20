@@ -1,18 +1,20 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Functionality for reading and storing children hashes from db.
 
@@ -99,7 +101,7 @@ mod tests {
 		children2.push(1_6);
 		write_children(&mut tx, 0, PREFIX, 1_2, children2);
 
-		db.commit(tx.clone());
+		db.commit(tx.clone()).unwrap();
 
 		let r1: Vec<u32> = read_children(&*db, 0, PREFIX, 1_1).expect("(1) Getting r1 failed");
 		let r2: Vec<u32> = read_children(&*db, 0, PREFIX, 1_2).expect("(1) Getting r2 failed");
@@ -108,7 +110,7 @@ mod tests {
 		assert_eq!(r2, vec![1_4, 1_6]);
 
 		remove_children(&mut tx, 0, PREFIX, 1_2);
-		db.commit(tx);
+		db.commit(tx).unwrap();
 
 		let r1: Vec<u32> = read_children(&*db, 0, PREFIX, 1_1).expect("(2) Getting r1 failed");
 		let r2: Vec<u32> = read_children(&*db, 0, PREFIX, 1_2).expect("(2) Getting r2 failed");

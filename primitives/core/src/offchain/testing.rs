@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,9 +21,10 @@
 //! the extra APIs.
 
 use std::{
-	collections::BTreeMap,
+	collections::{BTreeMap, VecDeque},
 	sync::Arc,
 };
+use crate::OpaquePeerId;
 use crate::offchain::{
 	self,
 	storage::{InMemOffchainStorage, OffchainOverlayedChange, OffchainOverlayedChanges},
@@ -69,6 +70,8 @@ pub struct TestPersistentOffchainDB {
 }
 
 impl TestPersistentOffchainDB {
+	const PREFIX: &'static [u8] = b"";
+
 	/// Create a new and empty offchain storage db for persistent items
 	pub fn new() -> Self {
 		Self {
@@ -81,10 +84,15 @@ impl TestPersistentOffchainDB {
 		let mut me = self.persistent.write();
 		for ((_prefix, key), value_operation) in changes.drain() {
 			match value_operation {
-				OffchainOverlayedChange::SetValue(val) => me.set(b"", key.as_slice(), val.as_slice()),
-				OffchainOverlayedChange::Remove => me.remove(b"", key.as_slice()),
+				OffchainOverlayedChange::SetValue(val) => me.set(Self::PREFIX, key.as_slice(), val.as_slice()),
+				OffchainOverlayedChange::Remove => me.remove(Self::PREFIX, key.as_slice()),
 			}
 		}
+	}
+
+	/// Retrieve a key from the test backend.
+	pub fn get(&self, key: &[u8]) -> Option<Vec<u8>> {
+		OffchainStorage::get(self, Self::PREFIX, key)
 	}
 }
 
@@ -120,7 +128,8 @@ impl OffchainStorage for TestPersistentOffchainDB {
 pub struct OffchainState {
 	/// A list of pending requests.
 	pub requests: BTreeMap<RequestId, PendingRequest>,
-	expected_requests: BTreeMap<RequestId, PendingRequest>,
+	// Queue of requests that the test is expected to perform (in order).
+	expected_requests: VecDeque<PendingRequest>,
 	/// Persistent local storage
 	pub persistent_storage: TestPersistentOffchainDB,
 	/// Local storage
@@ -156,8 +165,8 @@ impl OffchainState {
 	}
 
 	fn fulfill_expected(&mut self, id: u16) {
-		if let Some(mut req) = self.expected_requests.remove(&RequestId(id)) {
-			let response = req.response.take().expect("Response checked while added.");
+		if let Some(mut req) = self.expected_requests.pop_back() {
+			let response = req.response.take().expect("Response checked when added.");
 			let headers = std::mem::take(&mut req.response_headers);
 			self.fulfill_pending_request(id, req, response, headers);
 		}
@@ -169,11 +178,12 @@ impl OffchainState {
 	/// before running the actual code that utilizes them (for instance before calling into runtime).
 	/// Expected request has to be fulfilled before this struct is dropped,
 	/// the `response` and `response_headers` fields will be used to return results to the callers.
-	pub fn expect_request(&mut self, id: u16, expected: PendingRequest) {
+	/// Requests are expected to be performed in the insertion order.
+	pub fn expect_request(&mut self, expected: PendingRequest) {
 		if expected.response.is_none() {
 			panic!("Expected request needs to have a response.");
 		}
-		self.expected_requests.insert(RequestId(id), expected);
+		self.expected_requests.push_front(expected);
 	}
 }
 
@@ -263,8 +273,8 @@ impl offchain::Externalities for TestOffchainExt {
 	fn local_storage_get(&mut self, kind: StorageKind, key: &[u8]) -> Option<Vec<u8>> {
 		let state = self.0.read();
 		match kind {
-			StorageKind::LOCAL => state.local_storage.get(b"", key),
-			StorageKind::PERSISTENT => state.persistent_storage.get(b"", key),
+			StorageKind::LOCAL => state.local_storage.get(TestPersistentOffchainDB::PREFIX, key),
+			StorageKind::PERSISTENT => state.persistent_storage.get(key),
 		}
 	}
 
@@ -357,7 +367,7 @@ impl offchain::Externalities for TestOffchainExt {
 		if let Some(req) = state.requests.get_mut(&request_id) {
 			let response = req.response
 				.as_mut()
-				.expect(&format!("No response provided for request: {:?}", request_id));
+				.unwrap_or_else(|| panic!("No response provided for request: {:?}", request_id));
 
 			if req.read >= response.len() {
 				// Remove the pending request as per spec.
@@ -372,6 +382,10 @@ impl offchain::Externalities for TestOffchainExt {
 		} else {
 			Err(HttpError::IoError)
 		}
+	}
+
+	fn set_authorized_nodes(&mut self, _nodes: Vec<OpaquePeerId>, _authorized_only: bool) {
+		unimplemented!()
 	}
 }
 

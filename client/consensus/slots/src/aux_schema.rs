@@ -1,24 +1,27 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Schema for slots in the aux-db.
 
 use codec::{Encode, Decode};
 use sc_client_api::backend::AuxStore;
 use sp_blockchain::{Result as ClientResult, Error as ClientError};
+use sp_consensus_slots::EquivocationProof;
 use sp_runtime::traits::Header;
 
 const SLOT_HEADER_MAP_KEY: &[u8] = b"slot_header_map";
@@ -44,31 +47,6 @@ fn load_decode<C, T>(backend: &C, key: &[u8]) -> ClientResult<Option<T>>
 	}
 }
 
-/// Represents an equivocation proof.
-#[derive(Debug, Clone)]
-pub struct EquivocationProof<H> {
-	slot: u64,
-	fst_header: H,
-	snd_header: H,
-}
-
-impl<H> EquivocationProof<H> {
-	/// Get the slot number where the equivocation happened.
-	pub fn slot(&self) -> u64 {
-		self.slot
-	}
-
-	/// Get the first header involved in the equivocation.
-	pub fn fst_header(&self) -> &H {
-		&self.fst_header
-	}
-
-	/// Get the second header involved in the equivocation.
-	pub fn snd_header(&self) -> &H {
-		&self.snd_header
-	}
-}
-
 /// Checks if the header is an equivocation and returns the proof in that case.
 ///
 /// Note: it detects equivocations only when slot_now - slot <= MAX_SLOT_CAPACITY.
@@ -78,7 +56,7 @@ pub fn check_equivocation<C, H, P>(
 	slot: u64,
 	header: &H,
 	signer: &P,
-) -> ClientResult<Option<EquivocationProof<H>>>
+) -> ClientResult<Option<EquivocationProof<H, P>>>
 	where
 		H: Header,
 		C: AuxStore,
@@ -114,9 +92,10 @@ pub fn check_equivocation<C, H, P>(
 			// 2) with different hash
 			if header.hash() != prev_header.hash() {
 				return Ok(Some(EquivocationProof {
-					slot, // 3) and mentioning the same slot.
-					fst_header: prev_header.clone(),
-					snd_header: header.clone(),
+					slot_number: slot,
+					offender: signer.clone(),
+					first_header: prev_header.clone(),
+					second_header: header.clone(),
 				}));
 			} else {
 				// We don't need to continue in case of duplicated header,

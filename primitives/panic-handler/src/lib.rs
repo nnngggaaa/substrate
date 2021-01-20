@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -52,11 +52,12 @@ enum OnPanic {
 ///
 /// The `bug_url` parameter is an invitation for users to visit that URL to submit a bug report
 /// in the case where a panic happens.
-pub fn set(bug_url: &'static str, version: &str) {
+pub fn set(bug_url: &str, version: &str) {
 	panic::set_hook(Box::new({
 		let version = version.to_string();
+		let bug_url = bug_url.to_string();
 		move |c| {
-			panic_hook(c, bug_url, &version)
+			panic_hook(c, &bug_url, &version)
 		}
 	}));
 }
@@ -130,7 +131,7 @@ impl Drop for AbortGuard {
 }
 
 /// Function being called when a panic happens.
-fn panic_hook(info: &PanicInfo, report_url: &'static str, version: &str) {
+fn panic_hook(info: &PanicInfo, report_url: &str, version: &str) {
 	let location = info.location();
 	let file = location.as_ref().map(|l| l.file()).unwrap_or("<unknown>");
 	let line = location.as_ref().map(|l| l.line()).unwrap_or(0);

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -22,7 +22,7 @@ use crate::params::SharedParams;
 use crate::CliConfiguration;
 use log::info;
 use sc_network::config::build_multiaddr;
-use sc_service::{config::MultiaddrWithPeerId, Configuration};
+use sc_service::{config::{MultiaddrWithPeerId, NetworkConfiguration}, ChainSpec};
 use structopt::StructOpt;
 use std::io::Write;
 
@@ -51,13 +51,16 @@ pub struct BuildSpecCmd {
 
 impl BuildSpecCmd {
 	/// Run the build-spec command
-	pub fn run(&self, config: Configuration) -> error::Result<()> {
+	pub fn run(
+		&self,
+		mut spec: Box<dyn ChainSpec>,
+		network_config: NetworkConfiguration,
+	) -> error::Result<()> {
 		info!("Building chain spec");
-		let mut spec = config.chain_spec;
 		let raw_output = self.raw;
 
 		if spec.boot_nodes().is_empty() && !self.disable_default_bootnode {
-			let keys = config.network.node_key.into_keypair()?;
+			let keys = network_config.node_key.into_keypair()?;
 			let peer_id = keys.public().into_peer_id();
 			let addr = MultiaddrWithPeerId {
 				multiaddr: build_multiaddr![Ip4([127, 0, 0, 1]), Tcp(30333u16)],

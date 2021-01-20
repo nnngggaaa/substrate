@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,7 +18,7 @@
 //! In-memory implementation of `Database`
 
 use std::collections::HashMap;
-use crate::{Database, Transaction, ColumnId, Change};
+use crate::{Database, Change, ColumnId, Transaction, error};
 use parking_lot::RwLock;
 
 #[derive(Default)]
@@ -29,7 +29,7 @@ pub struct MemDb<H: Clone + Send + Sync + Eq + PartialEq + Default + std::hash::
 impl<H> Database<H> for MemDb<H>
 	where H: Clone + Send + Sync + Eq + PartialEq + Default + std::hash::Hash
 {
-	fn commit(&self, transaction: Transaction<H>) {
+	fn commit(&self, transaction: Transaction<H>) -> error::Result<()> {
 		let mut s = self.0.write();
 		for change in transaction.0.into_iter() {
 			match change {
@@ -39,6 +39,8 @@ impl<H> Database<H> for MemDb<H>
 				Change::Release(hash) => { s.1.remove(&hash); },
 			}
 		}
+
+		Ok(())
 	}
 
 	fn get(&self, col: ColumnId, key: &[u8]) -> Option<Vec<u8>> {

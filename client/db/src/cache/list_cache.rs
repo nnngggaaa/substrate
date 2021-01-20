@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -860,16 +860,15 @@ fn read_forks<Block: BlockT, T: CacheItemT, S: Storage<Block, T>>(
 }
 
 #[cfg(test)]
-pub mod tests {
+mod tests {
 	use substrate_test_runtime_client::runtime::H256;
 	use sp_runtime::testing::{Header, Block as RawBlock, ExtrinsicWrapper};
-	use sp_runtime::traits::Header as HeaderT;
 	use crate::cache::list_storage::tests::{DummyStorage, FaultyStorage, DummyTransaction};
 	use super::*;
 
 	type Block = RawBlock<ExtrinsicWrapper<u64>>;
 
-	pub fn test_id(number: u64) -> ComplexBlockId<Block> {
+	fn test_id(number: u64) -> ComplexBlockId<Block> {
 		ComplexBlockId::new(H256::from_low_u64_be(number), number)
 	}
 

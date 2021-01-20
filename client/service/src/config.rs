@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -18,7 +18,10 @@
 
 //! Service configuration.
 
-pub use sc_client_db::{Database, PruningMode, DatabaseSettingsSrc as DatabaseConfig};
+pub use sc_client_db::{
+	Database, PruningMode, DatabaseSettingsSrc as DatabaseConfig,
+	KeepBlocks, TransactionStorageMode
+};
 pub use sc_network::Multiaddr;
 pub use sc_network::config::{ExtTransport, MultiaddrWithPeerId, NetworkConfiguration, Role, NodeKeyConfig};
 pub use sc_executor::WasmExecutionMethod;
@@ -27,7 +30,7 @@ use sc_client_api::execution_extensions::ExecutionStrategies;
 use std::{io, future::Future, path::{PathBuf, Path}, pin::Pin, net::SocketAddr, sync::Arc};
 pub use sc_transaction_pool::txpool::Options as TransactionPoolOptions;
 use sc_chain_spec::ChainSpec;
-use sp_core::crypto::Protected;
+use sp_core::crypto::SecretString;
 pub use sc_telemetry::TelemetryEndpoints;
 use prometheus_endpoint::Registry;
 #[cfg(not(target_os = "unknown"))]
@@ -37,9 +40,9 @@ use tempfile::TempDir;
 #[derive(Debug)]
 pub struct Configuration {
 	/// Implementation name
-	pub impl_name: &'static str,
+	pub impl_name: String,
 	/// Implementation version (see sc-cli to see an example of format)
-	pub impl_version: &'static str,
+	pub impl_version: String,
 	/// Node role.
 	pub role: Role,
 	/// How to spawn background tasks. Mandatory, otherwise creating a `Service` will error.
@@ -50,18 +53,28 @@ pub struct Configuration {
 	pub network: NetworkConfiguration,
 	/// Configuration for the keystore.
 	pub keystore: KeystoreConfig,
+	/// Remote URI to connect to for async keystore support
+	pub keystore_remote: Option<String>,
 	/// Configuration for the database.
 	pub database: DatabaseConfig,
 	/// Size of internal state cache in Bytes
 	pub state_cache_size: usize,
 	/// Size in percent of cache size dedicated to child tries
 	pub state_cache_child_ratio: Option<usize>,
-	/// Pruning settings.
-	pub pruning: PruningMode,
+	/// State pruning settings.
+	pub state_pruning: PruningMode,
+	/// Number of blocks to keep in the db.
+	pub keep_blocks: KeepBlocks,
+	/// Transaction storage scheme.
+	pub transaction_storage: TransactionStorageMode,
 	/// Chain configuration.
 	pub chain_spec: Box<dyn ChainSpec>,
 	/// Wasm execution method.
 	pub wasm_method: WasmExecutionMethod,
+	/// Directory where local WASM runtimes live. These runtimes take precedence
+	/// over on-chain runtimes when the spec version matches. Set to `None` to
+	/// disable overrides (default).
+	pub wasm_runtime_overrides: Option<PathBuf>,
 	/// Execution strategies.
 	pub execution_strategies: ExecutionStrategies,
 	/// RPC over HTTP binding address. `None` if disabled.
@@ -99,6 +112,8 @@ pub struct Configuration {
 	pub dev_key_seed: Option<String>,
 	/// Tracing targets
 	pub tracing_targets: Option<String>,
+	/// Is log filter reloading disabled
+	pub disable_log_reloading: bool,
 	/// Tracing receiver
 	pub tracing_receiver: sc_tracing::TracingReceiver,
 	/// The size of the instances cache.
@@ -130,7 +145,7 @@ pub enum KeystoreConfig {
 		/// The path of the keystore.
 		path: PathBuf,
 		/// Node keystore's password.
-		password: Option<Protected<String>>
+		password: Option<SecretString>
 	},
 	/// In-memory keystore. Recommended for in-browser nodes.
 	InMemory,
@@ -180,6 +195,11 @@ impl Configuration {
 	/// Returns a string displaying the node role.
 	pub fn display_role(&self) -> String {
 		self.role.to_string()
+	}
+
+	/// Returns the prometheus metrics registry, if available.
+	pub fn prometheus_registry<'a>(&'a self) -> Option<&'a Registry> {
+		self.prometheus_config.as_ref().map(|config| &config.registry)
 	}
 }
 
@@ -250,6 +270,13 @@ impl BasePath {
 			BasePath::Permanenent(path) => path.as_path(),
 		}
 	}
+
+	/// Returns the configuration directory inside this base path.
+	///
+	/// The path looks like `$base_path/chains/$chain_id`
+	pub fn config_dir(&self, chain_id: &str) -> PathBuf {
+		self.path().join("chains").join(chain_id)
+	}
 }
 
 impl std::convert::From<PathBuf> for BasePath {
@@ -258,7 +285,9 @@ impl std::convert::From<PathBuf> for BasePath {
 	}
 }
 
-type TaskExecutorInner = Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>, TaskType) + Send + Sync>;
+// NOTE: here for code readability.
+pub(crate) type SomeFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
+pub(crate) type JoinFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
 
 /// Callable object that execute tasks.
 ///
@@ -270,37 +299,27 @@ type TaskExecutorInner = Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>, Ta
 ///
 /// ```
 /// # use sc_service::TaskExecutor;
-/// # mod tokio { pub mod runtime {
-/// # #[derive(Clone)]
-/// # pub struct Runtime;
-/// # impl Runtime {
-/// # pub fn new() -> Result<Self, ()> { Ok(Runtime) }
-/// # pub fn handle(&self) -> &Self { &self }
-/// # pub fn spawn(&self, _: std::pin::Pin<Box<dyn futures::future::Future<Output = ()> + Send>>) {}
-/// # }
-/// # } }
+/// use futures::future::FutureExt;
 /// use tokio::runtime::Runtime;
 ///
 /// let runtime = Runtime::new().unwrap();
 /// let handle = runtime.handle().clone();
 /// let task_executor: TaskExecutor = (move |future, _task_type| {
-///		handle.spawn(future);
-///	}).into();
+///     handle.spawn(future).map(|_| ())
+/// }).into();
 /// ```
 ///
 /// ## Using async-std
 ///
 /// ```
 /// # use sc_service::TaskExecutor;
-/// # mod async_std { pub mod task {
-/// # pub fn spawn(_: std::pin::Pin<Box<dyn futures::future::Future<Output = ()> + Send>>) {}
-/// # } }
 /// let task_executor: TaskExecutor = (|future, _task_type| {
-///		async_std::task::spawn(future);
-///	}).into();
+///     // NOTE: async-std's JoinHandle is not a Result so we don't need to map the result
+///     async_std::task::spawn(future)
+/// }).into();
 /// ```
 #[derive(Clone)]
-pub struct TaskExecutor(TaskExecutorInner);
+pub struct TaskExecutor(Arc<dyn Fn(SomeFuture, TaskType) -> JoinFuture + Send + Sync>);
 
 impl std::fmt::Debug for TaskExecutor {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -308,18 +327,19 @@ impl std::fmt::Debug for TaskExecutor {
 	}
 }
 
-impl<F> std::convert::From<F> for TaskExecutor
+impl<F, FUT> std::convert::From<F> for TaskExecutor
 where
-	F: Fn(Pin<Box<dyn Future<Output = ()> + Send>>, TaskType) + Send + Sync + 'static,
+	F: Fn(SomeFuture, TaskType) -> FUT + Send + Sync + 'static,
+	FUT: Future<Output = ()> + Send + 'static,
 {
-	fn from(x: F) -> Self {
-		Self(Arc::new(x))
+	fn from(func: F) -> Self {
+		Self(Arc::new(move |fut, tt| Box::pin(func(fut, tt))))
 	}
 }
 
 impl TaskExecutor {
 	/// Spawns a new asynchronous task.
-	pub fn spawn(&self, future: Pin<Box<dyn Future<Output = ()> + Send>>, task_type: TaskType) {
+	pub fn spawn(&self, future: SomeFuture, task_type: TaskType) -> JoinFuture {
 		self.0(future, task_type)
 	}
 }

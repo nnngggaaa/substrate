@@ -1,18 +1,20 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
@@ -64,7 +66,6 @@ pub fn extension_derive(ast: &DeriveInput) -> proc_macro::TokenStream {
 	})
 }
 
-
 /// Implements required traits and creates `Fork` structs for `ChainSpec` custom parameter group.
 pub fn group_derive(ast: &DeriveInput) -> proc_macro::TokenStream {
 	derive(ast, |crate_name, name, generics: &syn::Generics, field_names, field_types, _fields| {
@@ -75,9 +76,27 @@ pub fn group_derive(ast: &DeriveInput) -> proc_macro::TokenStream {
 		let to_fork = generate_base_to_fork(&fork_name, &field_names);
 		let combine_with = generate_combine_with(&field_names);
 		let to_base = generate_fork_to_base(name, &field_names);
+		let serde_crate_name = match proc_macro_crate::crate_name("serde") {
+			Ok(name) => Ident::new(&name.replace("-", "_"), Span::call_site()),
+			Err(e) => {
+				let err = Error::new(
+					Span::call_site(),
+					&format!("Could not find `serde` crate: {}", e),
+				).to_compile_error();
+
+				return quote!( #err ).into();
+			}
+		};
 
 		quote! {
-			#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ChainSpecExtension)]
+			#[derive(
+				Debug,
+				Clone,
+				PartialEq,
+				#serde_crate_name::Serialize,
+				#serde_crate_name::Deserialize,
+				ChainSpecExtension,
+			)]
 			pub struct #fork_name #ty_generics #where_clause {
 				#fork_fields
 			}

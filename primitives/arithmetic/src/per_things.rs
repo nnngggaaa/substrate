@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -61,13 +61,11 @@ pub trait PerThing:
 	fn is_one(&self) -> bool { self.deconstruct() == Self::ACCURACY }
 
 	/// Build this type from a percent. Equivalent to `Self::from_parts(x * Self::ACCURACY / 100)`
-	/// but more accurate.
+	/// but more accurate and can cope with potential type overflows.
 	fn from_percent(x: Self::Inner) -> Self {
-		let a = x.min(100.into());
-		let b = Self::ACCURACY;
-		// if Self::ACCURACY % 100 > 0 then we need the correction for accuracy
-		let c = rational_mul_correction::<Self::Inner, Self>(b, a, 100.into(), Rounding::Nearest);
-		Self::from_parts(a / 100.into() * b + c)
+		let a: Self::Inner = x.min(100.into());
+		let b: Self::Inner = 100.into();
+		Self::from_rational_approximation(a, b)
 	}
 
 	/// Return the product of multiplication of this value by itself.
@@ -323,8 +321,27 @@ macro_rules! implement_per_thing {
 		///
 		#[doc = $title]
 		#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-		#[derive(Encode, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, RuntimeDebug, CompactAs)]
+		#[derive(Encode, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, RuntimeDebug)]
 		pub struct $name($type);
+
+		/// Implementation makes any compact encoding of `PerThing::Inner` valid,
+		/// when decoding it will saturate up to `PerThing::ACCURACY`.
+		impl CompactAs for $name {
+			type As = $type;
+			fn encode_as(&self) -> &Self::As {
+				&self.0
+			}
+			fn decode_from(x: Self::As) -> Self {
+				// Saturates if `x` is more than `$max` internally.
+				Self::from_parts(x)
+			}
+		}
+
+		impl From<codec::Compact<$name>> for $name {
+			fn from(x: codec::Compact<$name>) -> $name {
+				x.0
+			}
+		}
 
 		impl PerThing for $name {
 			type Inner = $type;
@@ -688,6 +705,7 @@ macro_rules! implement_per_thing {
 
 				assert_eq!($name::from_percent(0), $name::from_parts(Zero::zero()));
 				assert_eq!($name::from_percent(10), $name::from_parts($max / 10));
+				assert_eq!($name::from_percent(50), $name::from_parts($max / 2));
 				assert_eq!($name::from_percent(100), $name::from_parts($max));
 				assert_eq!($name::from_percent(200), $name::from_parts($max));
 
@@ -696,6 +714,15 @@ macro_rules! implement_per_thing {
 				assert_eq!($name::from_fraction(1.0), $name::from_parts($max));
 				assert_eq!($name::from_fraction(2.0), $name::from_parts($max));
 				assert_eq!($name::from_fraction(-1.0), $name::from_parts(Zero::zero()));
+			}
+
+			#[test]
+			fn percent_trait_impl_works() {
+				assert_eq!(<$name as PerThing>::from_percent(0), $name::from_parts(Zero::zero()));
+				assert_eq!(<$name as PerThing>::from_percent(10), $name::from_parts($max / 10));
+				assert_eq!(<$name as PerThing>::from_percent(50), $name::from_parts($max / 2));
+				assert_eq!(<$name as PerThing>::from_percent(100), $name::from_parts($max));
+				assert_eq!(<$name as PerThing>::from_percent(200), $name::from_parts($max));
 			}
 
 			macro_rules! u256ify {
@@ -1166,8 +1193,64 @@ macro_rules! implement_per_thing {
 				// deconstruct is also const, hence it can be called in const rhs.
 				const C5: bool = C1.deconstruct() == 0;
 			}
+
+			#[test]
+			fn compact_decoding_saturate_when_beyond_accuracy() {
+				use num_traits::Bounded;
+				use codec::Compact;
+
+				let p = Compact::<$name>::decode(&mut &Compact(<$type>::max_value()).encode()[..])
+					.unwrap();
+				assert_eq!((p.0).0, $max);
+				assert_eq!($name::from(p), $name::max_value());
+			}
 		}
 	};
+}
+
+macro_rules! implement_per_thing_with_perthousand {
+	(
+		$name:ident,
+		$test_mod:ident,
+		$pt_test_mod:ident,
+		[$($test_units:tt),+],
+		$max:tt,
+		$type:ty,
+		$upper_type:ty,
+		$title:expr $(,)?
+	) => {
+		implement_per_thing! {
+			$name, $test_mod, [ $( $test_units ),+ ], $max, $type, $upper_type, $title,
+		}
+		impl $name {
+			/// Converts a percent into `Self`. Equal to `x / 1000`.
+			///
+			/// This can be created at compile time.
+			pub const fn from_perthousand(x: $type) -> Self {
+				Self(([x, 1000][(x > 1000) as usize] as $upper_type * $max as $upper_type / 1000) as $type)
+			}
+		}
+		#[cfg(test)]
+		mod $pt_test_mod {
+			use super::$name;
+			use crate::traits::Zero;
+
+			#[test]
+			fn from_perthousand_works() {
+				// some really basic stuff
+				assert_eq!($name::from_perthousand(00), $name::from_parts(Zero::zero()));
+				assert_eq!($name::from_perthousand(100), $name::from_parts($max / 10));
+				assert_eq!($name::from_perthousand(1000), $name::from_parts($max));
+				assert_eq!($name::from_perthousand(2000), $name::from_parts($max));
+			}
+
+			#[test]
+			#[allow(unused)]
+			fn const_fns_work() {
+				const C1: $name = $name::from_perthousand(500);
+			}
+		}
+	}
 }
 
 implement_per_thing!(
@@ -1179,36 +1262,40 @@ implement_per_thing!(
 	u16,
 	"_Percent_",
 );
-implement_per_thing!(
+implement_per_thing_with_perthousand!(
 	PerU16,
 	test_peru16,
+	test_peru16_extra,
 	[u32, u64, u128],
 	65535_u16,
 	u16,
 	u32,
 	"_Parts per 65535_",
 );
-implement_per_thing!(
+implement_per_thing_with_perthousand!(
 	Permill,
 	test_permill,
+	test_permill_extra,
 	[u32, u64, u128],
 	1_000_000u32,
 	u32,
 	u64,
 	"_Parts per Million_",
 );
-implement_per_thing!(
+implement_per_thing_with_perthousand!(
 	Perbill,
 	test_perbill,
+	test_perbill_extra,
 	[u32, u64, u128],
 	1_000_000_000u32,
 	u32,
 	u64,
 	"_Parts per Billion_",
 );
-implement_per_thing!(
+implement_per_thing_with_perthousand!(
 	Perquintill,
 	test_perquintill,
+	test_perquintill_extra,
 	[u64, u128],
 	1_000_000_000_000_000_000u64,
 	u64,
